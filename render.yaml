@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: handwritten-digit-recognition
+    runtime: docker
+    plan: free
+    healthCheckPath: /health

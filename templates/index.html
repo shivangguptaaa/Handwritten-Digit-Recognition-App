@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Handwritten Digit Recognition · CNN</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080f1e;
+      --surface: #0f172a;
+      --surface-2: #162138;
+      --border: #23314d;
+      --border-strong: #33476b;
+      --accent: #06b6d4;
+      --accent-soft: rgba(6, 182, 212, 0.14);
+      --accent2: #6366f1;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --success: #10b981;
+      --danger: #f43f5e;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 36px 20px 48px;
+      background-image:
+        radial-gradient(ellipse at 15% 10%, rgba(6, 182, 212, 0.11) 0%, transparent 55%),
+        radial-gradient(ellipse at 85% 90%, rgba(99, 102, 241, 0.10) 0%, transparent 55%);
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+      max-width: 860px;
+      width: 100%;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #22d3ee;
+      background: var(--accent-soft);
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      padding: 5px 13px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #22d3ee;
+    }
+
+    header h1 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: clamp(1.9rem, 4.5vw, 2.9rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      line-height: 1.08;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 0.88rem;
+      margin-top: 10px;
+      letter-spacing: 0.01em;
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+      max-width: 860px;
+    }
+
+    @media (max-width: 720px) {
+      .main { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .panel-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .sample-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sample-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-right: 2px;
+    }
+
+    .sample-btn {
+      flex: 0 0 auto;
+      padding: 4px 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      font-weight: 600;
+      border-radius: 7px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .sample-btn:hover {
+      border-color: var(--accent);
+      color: #22d3ee;
+    }
+
+    /* Canvas */
+    .canvas-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      cursor: crosshair;
+      background: #000;
+    }
+
+    #drawCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      touch-action: none;
+    }
+
+    .canvas-guides {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 28px 28px;
+      box-shadow: inset 0 0 36px rgba(6, 182, 212, 0.10);
+    }
+
+    .controls-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+
+    .brush-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brush-control input[type="range"] {
+      width: 82px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .auto-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+      color: var(--text);
+    }
+
+    .auto-toggle input {
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    button {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+
+    #clearBtn:hover {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    #predictBtn {
+      flex: 1.5;
+      background: linear-gradient(135deg, #06b6d4, #0ea5e9);
+      color: #032029;
+      border-color: transparent;
+      font-weight: 700;
+    }
+
+    #predictBtn:hover {
+      filter: brightness(1.06);
+      transform: translateY(-1px);
+    }
+
+    #predictBtn:active { transform: translateY(0); }
+
+    /* Result panel */
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 112px;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .digit-display {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 112px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #070d1a;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .digit-display::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, rgba(6, 182, 212, 0.14), transparent 70%);
+    }
+
+    #resultDigit {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 4.4rem;
+      font-weight: 800;
+      color: #22d3ee;
+      position: relative;
+      line-height: 1;
+    }
+
+    .placeholder-text {
+      color: var(--muted);
+      font-size: 1.6rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+    }
+
+    .preview-box {
+      height: 112px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #070d1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px;
+    }
+
+    .preview-box span {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    #cnnPreview {
+      width: 68px;
+      height: 68px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #000;
+      image-rendering: pixelated;
+      object-fit: contain;
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .meta-label {
+      color: var(--muted);
+      font-size: 0.66rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    #confidenceVal {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--success);
+    }
+
+    #latencyVal {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+      text-align: right;
+    }
+
+    /* Bar chart */
+    .bar-chart { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 16px 1fr 52px;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .bar-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.74rem;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .bar-track {
+      height: 7px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--accent2);
+      width: 0%;
+      transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .bar-fill.top { background: #22d3ee; }
+
+    .bar-pct {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-align: right;
+    }
+    .bar-pct.top { color: #22d3ee; font-weight: 700; }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 10px;
+      min-height: 18px;
+    }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status {
+      font-size: 0.74rem;
+      color: var(--muted);
+      letter-spacing: 0.01em;
+    }
+
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      width: 100%;
+      max-width: 860px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 720px) {
+      .specs-grid { grid-template-columns: 1fr; }
+    }
+
+    .spec-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+
+    .spec-k {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #22d3ee;
+      margin-bottom: 6px;
+    }
+
+    .spec-v {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="badge"><span class="badge-dot"></span>MNIST CNN · Live Inference</div>
+  <h1>Handwritten Digit Recognition</h1>
+  <p>Draw a digit (0–9) or try a sample · Inspect the exact 28×28 input tensor</p>
+</header>
+
+<div class="main">
+  <!-- Left: Draw panel -->
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">// Draw Input</div>
+      <div class="sample-row">
+        <span class="sample-label">Try:</span>
+        <button type="button" class="sample-btn" data-sample="3">3</button>
+        <button type="button" class="sample-btn" data-sample="5">5</button>
+        <button type="button" class="sample-btn" data-sample="7">7</button>
+        <button type="button" class="sample-btn" data-sample="8">8</button>
+      </div>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="drawCanvas" width="280" height="280"></canvas>
+      <div class="canvas-guides"></div>
+    </div>
+
+    <div class="controls-strip">
+      <label class="brush-control">
+        <span>Stroke</span>
+        <input type="range" id="brushSize" min="12" max="26" value="18" />
+        <span id="brushVal">18px</span>
+      </label>
+      <label class="auto-toggle">
+        <input type="checkbox" id="autoPredict" checked />
+        <span>Auto-predict</span>
+      </label>
+    </div>
+
+    <div class="btn-row">
+      <button type="button" class="btn-secondary" id="undoBtn">UNDO</button>
+      <button type="button" class="btn-secondary" id="clearBtn">CLEAR</button>
+      <button type="button" id="predictBtn">PREDICT →</button>
+    </div>
+
+    <div class="status-row">
+      <div class="spinner" id="spinner"></div>
+      <div class="status" id="status">Draw a digit (0–9) above</div>
+    </div>
+  </div>
+
+  <!-- Right: Result panel -->
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">// Model Prediction</div>
+    </div>
+
+    <div class="result-grid">
+      <div class="digit-display">
+        <span id="resultDigit"><span class="placeholder-text">?</span></span>
+      </div>
+      <div class="preview-box">
+        <span>28×28 Input</span>
+        <img id="cnnPreview" alt="28x28 CNN preview" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
+      </div>
+    </div>
+
+    <div class="meta-row">
+      <div class="meta-item">
+        <span class="meta-label">Confidence</span>
+        <span id="confidenceVal">—</span>
+      </div>
+      <div class="meta-item" style="align-items: flex-end;">
+        <span class="meta-label">Inference</span>
+        <span id="latencyVal">—</span>
+      </div>
+    </div>
+
+    <div class="panel-title">// Class Probabilities</div>
+    <div class="bar-chart" id="barChart"></div>
+  </div>
+</div>
+
+<section class="specs-grid">
+  <div class="spec-card">
+    <div class="spec-k">Architecture</div>
+    <div class="spec-v">4-layer Conv2D CNN with BatchNorm, MaxPooling2D, and Dropout (0.25 / 0.5) trained on MNIST.</div>
+  </div>
+  <div class="spec-card">
+    <div class="spec-k">Preprocessing</div>
+    <div class="spec-v">Bounding-box crop, aspect-ratio 20×20 scale, center-of-mass 28×28 alignment, and Gaussian smoothing.</div>
+  </div>
+  <div class="spec-card">
+    <div class="spec-k">Scope &amp; Limits</div>
+    <div class="spec-v">Rejects blank canvases, expects single centered digits (0–9), and exposes full 10-class softmax uncertainty.</div>
+  </div>
+</section>
+
+<script>
+  const canvas = document.getElementById('drawCanvas');
+  const ctx = canvas.getContext('2d');
+  const brushInput = document.getElementById('brushSize');
+  const brushVal = document.getElementById('brushVal');
+  const autoPredictInput = document.getElementById('autoPredict');
+
+  let drawing = false;
+  let strokeWidth = 18;
+  let history = [];
+  let autoTimer = null;
+
+  function initCanvas() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = strokeWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
+  initCanvas();
+
+  function pushHistory() {
+    if (history.length >= 20) history.shift();
+    history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+  }
+
+  brushInput.addEventListener('input', () => {
+    strokeWidth = Number(brushInput.value);
+    ctx.lineWidth = strokeWidth;
+    brushVal.textContent = `${strokeWidth}px`;
+  });
+
+  // Build 0-9 probability bars
+  const barChart = document.getElementById('barChart');
+  for (let i = 0; i < 10; i++) {
+    barChart.innerHTML += `
+      <div class="bar-row">
+        <span class="bar-label">${i}</span>
+        <div class="bar-track"><div class="bar-fill" id="bar${i}"></div></div>
+        <span class="bar-pct" id="pct${i}">0.0%</span>
+      </div>`;
+  }
+
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+  }
+
+  function startStroke(e) {
+    if (autoTimer) clearTimeout(autoTimer);
+    pushHistory();
+    drawing = true;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = strokeWidth;
+    ctx.beginPath();
+    const p = getPos(e);
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + 0.01, p.y + 0.01);
+    ctx.stroke();
+  }
+
+  function moveStroke(e) {
+    if (!drawing) return;
+    const p = getPos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
+
+  function endStroke() {
+    if (!drawing) return;
+    drawing = false;
+    if (autoPredictInput.checked) {
+      autoTimer = setTimeout(runPrediction, 220);
+    }
+  }
+
+  canvas.addEventListener('mousedown', startStroke);
+  canvas.addEventListener('mousemove', moveStroke);
+  window.addEventListener('mouseup', endStroke);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); startStroke(e); }, { passive: false });
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); moveStroke(e); }, { passive: false });
+  canvas.addEventListener('touchend', endStroke);
+
+  function resetResults() {
+    document.getElementById('resultDigit').innerHTML = '<span class="placeholder-text">?</span>';
+    document.getElementById('confidenceVal').textContent = '—';
+    document.getElementById('latencyVal').textContent = '—';
+    document.getElementById('cnnPreview').src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    document.getElementById('status').textContent = 'Draw a digit (0–9) above';
+    for (let i = 0; i < 10; i++) {
+      document.getElementById(`bar${i}`).style.width = '0%';
+      document.getElementById(`bar${i}`).classList.remove('top');
+      document.getElementById(`pct${i}`).textContent = '0.0%';
+      document.getElementById(`pct${i}`).classList.remove('top');
+    }
+  }
+
+  document.getElementById('clearBtn').onclick = () => {
+    if (autoTimer) clearTimeout(autoTimer);
+    history = [];
+    initCanvas();
+    resetResults();
+  };
+
+  document.getElementById('undoBtn').onclick = () => {
+    if (autoTimer) clearTimeout(autoTimer);
+    if (history.length === 0) return;
+    const prev = history.pop();
+    ctx.putImageData(prev, 0, 0);
+    if (autoPredictInput.checked) {
+      runPrediction();
+    }
+  };
+
+  // Sample stroke generators for quick 1-click testing
+  const SAMPLES = {
+    3: (c) => {
+      c.beginPath();
+      c.moveTo(85, 78); c.quadraticCurveTo(185, 55, 178, 112);
+      c.quadraticCurveTo(175, 138, 120, 140);
+      c.quadraticCurveTo(192, 145, 186, 195);
+      c.quadraticCurveTo(175, 232, 82, 212);
+      c.stroke();
+    },
+    5: (c) => {
+      c.beginPath();
+      c.moveTo(182, 68); c.lineTo(104, 68); c.lineTo(98, 132);
+      c.quadraticCurveTo(184, 122, 185, 180);
+      c.quadraticCurveTo(182, 224, 92, 214);
+      c.stroke();
+    },
+    7: (c) => {
+      c.beginPath();
+      c.moveTo(80, 74); c.lineTo(192, 70); c.lineTo(116, 222);
+      c.stroke();
+    },
+    8: (c) => {
+      c.beginPath();
+      c.moveTo(142, 136);
+      c.bezierCurveTo(85, 115, 92, 62, 142, 64);
+      c.bezierCurveTo(192, 66, 194, 115, 140, 138);
+      c.bezierCurveTo(80, 160, 84, 222, 142, 222);
+      c.bezierCurveTo(200, 222, 198, 158, 142, 136);
+      c.stroke();
+    },
+  };
+
+  document.querySelectorAll('.sample-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const d = btn.dataset.sample;
+      if (!SAMPLES[d]) return;
+      pushHistory();
+      initCanvas();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = strokeWidth;
+      SAMPLES[d](ctx);
+      runPrediction();
+    });
+  });
+
+  async function runPrediction() {
+    const imageData = canvas.toDataURL('image/png');
+    document.getElementById('spinner').style.display = 'block';
+    document.getElementById('status').textContent = 'Running CNN inference...';
+
+    try {
+      const res = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imageData })
+      });
+      const data = await res.json();
+
+      if (data.digit === null) {
+        resetResults();
+        document.getElementById('status').textContent = 'Canvas is empty — draw a digit';
+        return;
+      }
+
+      document.getElementById('resultDigit').textContent = data.digit;
+      document.getElementById('confidenceVal').textContent = `${data.confidence}%`;
+      document.getElementById('latencyVal').textContent = data.latency_ms !== undefined ? `${data.latency_ms} ms` : '—';
+      if (data.preview) {
+        document.getElementById('cnnPreview').src = data.preview;
+      }
+      document.getElementById('status').textContent = `Predicted ${data.digit} (${data.confidence}% confidence)`;
+
+      const topDigit = data.digit;
+      data.probabilities.forEach((p, i) => {
+        const pct = (p * 100).toFixed(1);
+        const bar = document.getElementById(`bar${i}`);
+        const pctEl = document.getElementById(`pct${i}`);
+        bar.style.width = `${pct}%`;
+        bar.classList.toggle('top', i === topDigit);
+        pctEl.textContent = `${pct}%`;
+        pctEl.classList.toggle('top', i === topDigit);
+      });
+    } catch (err) {
+      document.getElementById('status').textContent = 'Error contacting prediction API';
+    } finally {
+      document.getElementById('spinner').style.display = 'none';
+    }
+  }
+
+  document.getElementById('predictBtn').onclick = runPrediction;
+</script>
+</body>
+</html>
